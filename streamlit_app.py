@@ -18,7 +18,6 @@ HISTORY = 4  # Количество дней для прогнозировани
 # Создание экземпляра датчика
 sensor = WeatherSensorAPI()
 
-
 # Инициализация session_state
 if "temp_inputs" not in st.session_state:
     st.session_state["temp_inputs"] = [f"{15 + i * 2}" for i in range(HISTORY)]
@@ -26,8 +25,19 @@ if "weather_inputs" not in st.session_state:
     st.session_state["weather_inputs"] = ["солнце"] * HISTORY
 
 
+def update_inputs_from_sensor():
+    """Обновить значения формы данными из сенсора."""
+    forecast = sensor.get_forecast_for_4_days()
+    for i in range(HISTORY):
+        st.session_state["temp_inputs"][i] = str(forecast[i]["temperature"])
+        st.session_state["weather_inputs"][i] = forecast[i]["weather_type"]
+
+
 def main():
     st.title('🌤️ Прогноз погоды')
+
+    # Кнопка для получения данных с датчика перед формой
+    st.button("Получить данные с датчика 📡", on_click=update_inputs_from_sensor)
 
     # Основная форма
     with st.form(key="main_form"):
@@ -38,7 +48,7 @@ def main():
         temp_cols = st.columns(HISTORY)
         for i, col in enumerate(temp_cols):
             st.session_state["temp_inputs"][i] = col.text_input(
-                f'День #{i+1}',
+                f'День #{i + 1}',
                 value=st.session_state["temp_inputs"][i],
                 key=f"temp_input_{i}"
             )
@@ -48,7 +58,7 @@ def main():
         weather_cols = st.columns(HISTORY)
         for i, col in enumerate(weather_cols):
             st.session_state["weather_inputs"][i] = col.selectbox(
-                f'День #{i+1}',
+                f'День #{i + 1}',
                 weather_encoding_ru_text,
                 index=weather_encoding_ru_text.index(st.session_state["weather_inputs"][i]),
                 key=f"weather_input_{i}"
@@ -56,14 +66,6 @@ def main():
 
         # Кнопка для выполнения предсказания
         submit_button = st.form_submit_button(label="Предсказать ✨")
-
-    # Кнопка для подстановки данных из датчика
-    if st.button("Получить данные с датчика 📡"):
-        forecast = sensor.get_forecast_for_4_days()
-        for i in range(HISTORY):
-            st.session_state["temp_inputs"][i] = str(forecast[i]["temperature"])
-            st.session_state["weather_inputs"][i] = forecast[i]["weather_type"]
-        st.experimental_rerun()  # Перезагрузка страницы для обновления значений
 
     # Обработка предсказания после нажатия кнопки
     if submit_button:
