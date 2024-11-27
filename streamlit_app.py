@@ -19,12 +19,15 @@ HISTORY = 4  # Количество дней для прогнозировани
 sensor = WeatherSensorAPI()
 
 
+# Инициализация session_state
+if "temp_inputs" not in st.session_state:
+    st.session_state["temp_inputs"] = [f"{15 + i * 2}" for i in range(HISTORY)]
+if "weather_inputs" not in st.session_state:
+    st.session_state["weather_inputs"] = ["солнце"] * HISTORY
+
+
 def main():
     st.title('🌤️ Прогноз погоды')
-
-    # Инициализация переменных для хранения значений формы
-    temp_inputs = [st.session_state.get(f"temp_input_{i}", f"{15 + i * 2}") for i in range(HISTORY)]
-    weather_inputs = [st.session_state.get(f"weather_input_{i}", "солнце") for i in range(HISTORY)]
 
     # Основная форма
     with st.form(key="main_form"):
@@ -34,13 +37,22 @@ def main():
         # Поля для ввода температуры
         temp_cols = st.columns(HISTORY)
         for i, col in enumerate(temp_cols):
-            temp_inputs[i] = col.text_input(f'День #{i+1}', value=temp_inputs[i], key=f"temp_input_{i}")
+            st.session_state["temp_inputs"][i] = col.text_input(
+                f'День #{i+1}',
+                value=st.session_state["temp_inputs"][i],
+                key=f"temp_input_{i}"
+            )
 
         st.caption('Введите тип погоды 🌤️:')
         # Поля для ввода типа погоды
         weather_cols = st.columns(HISTORY)
         for i, col in enumerate(weather_cols):
-            weather_inputs[i] = col.selectbox(f'День #{i+1}', weather_encoding_ru_text, index=weather_encoding_ru_text.index(weather_inputs[i]), key=f"weather_input_{i}")
+            st.session_state["weather_inputs"][i] = col.selectbox(
+                f'День #{i+1}',
+                weather_encoding_ru_text,
+                index=weather_encoding_ru_text.index(st.session_state["weather_inputs"][i]),
+                key=f"weather_input_{i}"
+            )
 
         # Кнопка для выполнения предсказания
         submit_button = st.form_submit_button(label="Предсказать ✨")
@@ -49,19 +61,18 @@ def main():
     if st.button("Получить данные с датчика 📡"):
         forecast = sensor.get_forecast_for_4_days()
         for i in range(HISTORY):
-            st.session_state[f"temp_input_{i}"] = str(forecast[i]["temperature"])
-            st.session_state[f"weather_input_{i}"] = forecast[i]["weather_type"]
-
+            st.session_state["temp_inputs"][i] = str(forecast[i]["temperature"])
+            st.session_state["weather_inputs"][i] = forecast[i]["weather_type"]
         st.experimental_rerun()  # Перезагрузка страницы для обновления значений
 
     # Обработка предсказания после нажатия кнопки
     if submit_button:
         # Преобразование входных данных для модели
-        temp_inputs_float = [float(x) for x in temp_inputs]
+        temp_inputs_float = [float(x) for x in st.session_state["temp_inputs"]]
         temp_inputs_array = np.expand_dims(temp_inputs_float, axis=0)
         temp_result = temp_model.predict(temp_inputs_array)
 
-        coded_weather = [weather_encoding[w] for w in weather_inputs]
+        coded_weather = [weather_encoding[w] for w in st.session_state["weather_inputs"]]
         coded_weather_array = np.expand_dims(coded_weather, axis=0)
         predicted_weather_index = np.argmax(weather_model.predict(coded_weather_array))
         predicted_weather = reverse_weather_encoding[predicted_weather_index]
