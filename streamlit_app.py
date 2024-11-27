@@ -34,9 +34,6 @@ if "rerun" in st.session_state and st.session_state["rerun"]:
 def init_db():
     conn = sqlite3.connect("weather_predictions.db")
     cursor = conn.cursor()
-
-    # Пересоздание таблицы
-    cursor.execute("DROP TABLE IF EXISTS predictions")
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS predictions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
