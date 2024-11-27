@@ -1,5 +1,6 @@
 import streamlit as st
 import numpy as np
+import sqlite3
 import keras.models
 from WeatherSensorAPI import WeatherSensorAPI
 
@@ -9,8 +10,8 @@ weather_model = keras.models.load_model("weather_full.keras")
 
 # Кодирование типов погоды
 weather_encoding = {"морось": 0, "дождь": 1, "солнце": 2, "снег": 3, "туман": 4}
-weather_encoding_ru_text = ["морось", "дождь", "солнце", "снег", "туман"]
 reverse_weather_encoding = {v: k for k, v in weather_encoding.items()}
+weather_encoding_ru_text = ["морось", "дождь", "солнце", "снег", "туман"]
 
 # Константы
 HISTORY = 4  # Количество дней для прогнозирования
@@ -25,6 +26,49 @@ if "weather_inputs" not in st.session_state:
     st.session_state["weather_inputs"] = ["солнце"] * HISTORY
 
 
+# Функция для работы с базой данных
+def init_db():
+    conn = sqlite3.connect("weather_predictions.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS predictions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            temperature_prediction TEXT,
+            weather_prediction TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
+def insert_prediction(temp_prediction, weather_prediction):
+    conn = sqlite3.connect("weather_predictions.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO predictions (temperature_prediction, weather_prediction) VALUES (?, ?)",
+        (temp_prediction, weather_prediction)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_predictions():
+    conn = sqlite3.connect("weather_predictions.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, temperature_prediction, weather_prediction FROM predictions ORDER BY id DESC")
+    predictions = cursor.fetchall()
+    conn.close()
+    return predictions
+
+
+def delete_prediction(prediction_id):
+    conn = sqlite3.connect("weather_predictions.db")
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM predictions WHERE id = ?", (prediction_id,))
+    conn.commit()
+    conn.close()
+
+
 def update_inputs_from_sensor():
     """Обновить значения формы данными из сенсора."""
     forecast = sensor.get_forecast_for_4_days()
@@ -34,6 +78,9 @@ def update_inputs_from_sensor():
 
 
 def main():
+    # Инициализация базы данных
+    init_db()
+
     st.title('🌤️ Прогноз погоды')
 
     # Кнопка для получения данных с датчика перед формой
@@ -79,10 +126,26 @@ def main():
         predicted_weather_index = np.argmax(weather_model.predict(coded_weather_array))
         predicted_weather = reverse_weather_encoding[predicted_weather_index]
 
+        # Сохранение результата в базу данных
+        insert_prediction(f"{int(temp_result[0][0])}°C", predicted_weather)
+
         # Вывод результатов
         st.subheader('Прогноз на следующий день 📅')
         st.write(f'🌡️ Температура: **{int(temp_result[0][0])}°C**')
         st.write(f'🌤️ Тип погоды: **{predicted_weather}**')
+
+    # Отображение последних прогнозов
+    st.subheader("История прогнозов 📝")
+    predictions = get_predictions()
+    if predictions:
+        for prediction_id, temp_prediction, weather_prediction in predictions:
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                st.write(f"🌡️ {temp_prediction}, 🌤️ {weather_prediction}")
+            with col2:
+                if st.button("❌ Удалить", key=f"delete_{prediction_id}"):
+                    delete_prediction(prediction_id)
+                    st.experimental_rerun()
 
 
 if __name__ == "__main__":
