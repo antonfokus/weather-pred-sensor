@@ -25,6 +25,10 @@ if "temp_inputs" not in st.session_state:
 if "weather_inputs" not in st.session_state:
     st.session_state["weather_inputs"] = ["солнце"] * HISTORY
 
+if "rerun" in st.session_state and st.session_state["rerun"]:
+    st.session_state["rerun"] = False
+    st.experimental_rerun()
+
 
 # Функция для работы с базой данных
 def init_db():
@@ -33,6 +37,8 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS predictions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            temp_inputs TEXT,
+            weather_inputs TEXT,
             temperature_prediction TEXT,
             weather_prediction TEXT
         )
@@ -41,12 +47,12 @@ def init_db():
     conn.close()
 
 
-def insert_prediction(temp_prediction, weather_prediction):
+def insert_prediction(temp_inputs, weather_inputs, temp_prediction, weather_prediction):
     conn = sqlite3.connect("weather_predictions.db")
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO predictions (temperature_prediction, weather_prediction) VALUES (?, ?)",
-        (temp_prediction, weather_prediction)
+        "INSERT INTO predictions (temp_inputs, weather_inputs, temperature_prediction, weather_prediction) VALUES (?, ?, ?, ?)",
+        (temp_inputs, weather_inputs, temp_prediction, weather_prediction)
     )
     conn.commit()
     conn.close()
@@ -55,7 +61,9 @@ def insert_prediction(temp_prediction, weather_prediction):
 def get_predictions():
     conn = sqlite3.connect("weather_predictions.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT id, temperature_prediction, weather_prediction FROM predictions ORDER BY id DESC")
+    cursor.execute(
+        "SELECT id, temp_inputs, weather_inputs, temperature_prediction, weather_prediction FROM predictions ORDER BY id DESC"
+    )
     predictions = cursor.fetchall()
     conn.close()
     return predictions
@@ -127,7 +135,12 @@ def main():
         predicted_weather = reverse_weather_encoding[predicted_weather_index]
 
         # Сохранение результата в базу данных
-        insert_prediction(f"{int(temp_result[0][0])}°C", predicted_weather)
+        insert_prediction(
+            str(st.session_state["temp_inputs"]),
+            str(st.session_state["weather_inputs"]),
+            f"{int(temp_result[0][0])}°C",
+            predicted_weather
+        )
 
         # Вывод результатов
         st.subheader('Прогноз на следующий день 📅')
@@ -138,14 +151,15 @@ def main():
     st.subheader("История прогнозов 📝")
     predictions = get_predictions()
     if predictions:
-        for prediction_id, temp_prediction, weather_prediction in predictions:
+        for prediction_id, temp_inputs, weather_inputs, temp_prediction, weather_prediction in predictions:
             col1, col2 = st.columns([4, 1])
             with col1:
-                st.write(f"🌡️ {temp_prediction}, 🌤️ {weather_prediction}")
+                st.write(f"**Изначальные данные:** 🌡️ {temp_inputs}, 🌤️ {weather_inputs}")
+                st.write(f"**Прогноз:** 🌡️ {temp_prediction}, 🌤️ {weather_prediction}")
             with col2:
                 if st.button("❌ Удалить", key=f"delete_{prediction_id}"):
                     delete_prediction(prediction_id)
-                    st.experimental_rerun()
+                    st.session_state["rerun"] = True
 
 
 if __name__ == "__main__":
