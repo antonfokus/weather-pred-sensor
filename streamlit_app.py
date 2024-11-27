@@ -6,8 +6,6 @@ from PIL.Image import Image
 import keras.models
 from keras.models import load_model
 
-# Используем функции рекомендаций по типу погоды
-from recommender import get_songs_by_weather, get_movies_by_weather
 
 # Импортируем нейромодели для предсказания погоды
 temp_model = keras.models.load_model("temp_full.keras")
